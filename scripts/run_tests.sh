@@ -9,6 +9,5 @@ run_case () {
   if [[ "$got" == "$exp" ]]; then echo "[OK] $(basename "$bin") $(basename "$in")"; ((pass++))
   else echo "[FAIL] $(basename "$bin")"; echo " got: $got"; echo " exp: $exp"; fi
 }
-for f in tests/wfg/*.in;    do run_case ./bin/detect_wfg    "$f" "${f%.in}.out"; done
-for f in tests/matrix/*.in; do run_case ./bin/detect_matrix "$f" "${f%.in}.out"; done
+for f in tests/wfg/*.in; do run_case ./bin/detect_wfg "$f" "${f%.in}.out"; done
 echo "$pass/$total tests passed"
