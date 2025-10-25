@@ -1,0 +1,11 @@
+bin/
+.obj/
+*.o
+*.a
+*.so
+*.dSYM/
+*.swp
+*.log
+core
+vgcore.*
+.DS_Store
