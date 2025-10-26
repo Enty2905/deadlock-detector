@@ -6,11 +6,11 @@ BINDIR  := bin
 OBJDIR  := .obj
 
 COMMON_OBJS := $(OBJDIR)/common/util.o $(OBJDIR)/graph/graph.o
-LIBCOMMON   := $(BINDIR)/libcommon.a
+LIBCOMMON  := $(BINDIR)/libcommon.a
 
 .PHONY: all clean fmt asan tsan ubsan
-
-all: $(LIBCOMMON)
+#
+all: $(LIBCOMMON) $(BINDIR)/detect_wfg $(BINDIR)/detect_matrix
 
 $(BINDIR) $(OBJDIR) $(OBJDIR)/common $(OBJDIR)/graph:
 	mkdir -p $@
