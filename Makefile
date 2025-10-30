@@ -1,5 +1,7 @@
 CC      := gcc
 CFLAGS  := -std=c11 -O2 -Wall -Wextra -Werror -pedantic -g
+demo_deadlock: src/demo/demo_deadlock.c
+	$(CC) $(CFLAGS) -o $@ $^ -lpthread
 INCDIR  := include
 SRCDIR  := src
 BINDIR  := bin
