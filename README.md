@@ -48,3 +48,14 @@ Run demo:
 
 Env:
   DD_LOG_LEVEL=0|1  (0=tắt log, 1=bật log)
+
+### Day 7 — Runtime WFG (Thread↔Mutex)
+- Trước `lock(m)`: thêm **T→M** (thread chờ mutex).
+- Sau khi lock: gỡ **T→M**, thêm **M→T** (mutex thuộc thread).
+- `unlock(m)`: gỡ **M→T`.
+- Phát hiện chu trình ngay sau khi thêm **T→M**.
+Demo:
+  timeout 2 ./bin/demo_deadlock
+  timeout 2 env DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock
+  timeout 2 ./bin/demo_deadlock3
+  timeout 2 env DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock3

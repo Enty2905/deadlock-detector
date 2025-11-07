@@ -14,7 +14,7 @@ LIBCOMMON   := $(BINDIR)/libcommon.a
 
 # === Default target ==========================================================
 .PHONY: all clean fmt test asan tsan ubsan
-all: $(LIBCOMMON) $(BINDIR)/detect_wfg $(BINDIR)/detect_matrix $(BINDIR)/ddetect $(BINDIR)/demo_deadlock $(BINDIR)/libdd.so
+all: $(LIBCOMMON) $(BINDIR)/detect_wfg $(BINDIR)/detect_matrix $(BINDIR)/ddetect $(BINDIR)/demo_deadlock $(BINDIR)/demo_deadlock3 $(BINDIR)/libdd.so
 
 # === Dirs ====================================================================
 $(BINDIR) $(OBJDIR) $(OBJDIR)/common $(OBJDIR)/graph $(OBJDIRPIC) $(OBJDIRPIC)/common $(OBJDIRPIC)/graph:
@@ -81,3 +81,6 @@ ubsan: clean all
 
 clean:
 	rm -rf $(OBJDIR) $(OBJDIRPIC) $(BINDIR) demo_deadlock libdd.so
+
+$(BINDIR)/demo_deadlock3: $(SRCDIR)/demo/demo_deadlock3.c | $(BINDIR)
+	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@

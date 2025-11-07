@@ -1,70 +1,79 @@
 #define _GNU_SOURCE
+#define _POSIX_C_SOURCE 200809L
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <stdarg.h>
 
 #include "graph.h"
 
-/* ===== logging level (mặc định = 1) ===== */
-static int g_log = 1;
+/* ===== logging ===== */
+static int g_log = 1; /* 0: off, 1: cycles only, 2: verbose */
 
-/* ===== giữ địa chỉ thật của pthread APIs ===== */
+static void dd_vlog(int lvl, const char* fmt, va_list ap){
+    if (g_log >= lvl){ vfprintf(stderr, fmt, ap); fflush(stderr); }
+}
+static void dd_log(int lvl, const char* fmt, ...){
+    va_list ap; va_start(ap, fmt); dd_vlog(lvl, fmt, ap); va_end(ap);
+}
+static long long now_ms(void){
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec*1000LL + ts.tv_nsec/1000000LL;
+}
+
+/* ===== real pthread funcs ===== */
 static int (*real_mutex_lock)(pthread_mutex_t*) = NULL;
 static int (*real_mutex_trylock)(pthread_mutex_t*) = NULL;
 static int (*real_mutex_unlock)(pthread_mutex_t*) = NULL;
 
-/* ===== đồ thị chờ giữa THREADS ===== */
-static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;  /* bảo vệ state toàn cục */
-static graph_t* g_wfg = NULL;
+/* ===== global state ===== */
+static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;  /* bảo vệ state */
+static graph_t* g_wfg = NULL; /* đồ thị có label node */
 
-/* ===== bảng (mutex -> owner) đơn giản ===== */
-typedef struct {
-    pthread_mutex_t* m;
-    unsigned long    owner;  /* thread id cast sang số */
-    int              count;  /* phòng trường hợp mutex recursive */
-} mrec_t;
+/* mutex -> owner */
+typedef struct { pthread_mutex_t* m; unsigned long owner; int count; } mrec_t;
+static mrec_t* g_tab=NULL; static size_t g_sz=0, g_cap=0;
 
-static mrec_t* g_tab = NULL;
-static size_t  g_sz  = 0, g_cap = 0;
+/* helpers */
+static inline unsigned long tid_self(void){ return (unsigned long)pthread_self(); }
 
-static inline unsigned long tid_self(void){
-    return (unsigned long)pthread_self();
-}
-
-/* ---- bảng mutex-owner ---- */
 static void tab_reserve(size_t need){
     if (g_cap >= need) return;
-    size_t nc = g_cap ? g_cap*2 : 16;
-    if (nc < need) nc = need;
+    size_t nc = g_cap ? g_cap*2 : 16; if (nc < need) nc = need;
     g_tab = (mrec_t*)realloc(g_tab, nc*sizeof(mrec_t));
     if (!g_tab){ perror("realloc g_tab"); abort(); }
-    memset(g_tab + g_cap, 0, (nc - g_cap)*sizeof(mrec_t));
-    g_cap = nc;
+    memset(g_tab + g_cap, 0, (nc - g_cap)*sizeof(mrec_t)); g_cap = nc;
 }
 static mrec_t* tab_find(pthread_mutex_t* m){
-    for (size_t i=0;i<g_sz;i++) if (g_tab[i].m == m) return &g_tab[i];
+    for (size_t i=0;i<g_sz;i++) if (g_tab[i].m==m) return &g_tab[i];
     return NULL;
 }
 static mrec_t* tab_get_or_add(pthread_mutex_t* m){
-    mrec_t* r = tab_find(m);
-    if (r) return r;
-    tab_reserve(g_sz+1);
-    g_tab[g_sz].m = m; g_tab[g_sz].owner = 0; g_tab[g_sz].count = 0;
-    return &g_tab[g_sz++];
+    mrec_t* r = tab_find(m); if (r) return r;
+    tab_reserve(g_sz+1); g_tab[g_sz].m=m; g_tab[g_sz].owner=0; g_tab[g_sz].count=0; return &g_tab[g_sz++];
 }
 
-/* ---- graph helpers ---- */
+/* node labels: T<tid> và M<addr> */
 static int node_of_thread(unsigned long t){
-    char lb[64];
-    snprintf(lb, sizeof(lb), "T%lu", t);
+    char lb[64]; snprintf(lb,sizeof(lb),"T%lu",t);
     return graph_get_or_add_node(g_wfg, lb);
 }
+static int node_of_mutex(const pthread_mutex_t* m){
+    char lb[64]; snprintf(lb,sizeof(lb),"M%p",(void*)m);
+    return graph_get_or_add_node(g_wfg, lb);
+}
+
+/* cycle logging (debounce) */
+static long long last_cycle_ms = 0;
 static void log_cycle_if_any(void){
     int* cyc=NULL; size_t L=0;
     if (graph_find_cycle(g_wfg, &cyc, &L)){
-        if (g_log){
+        long long t = now_ms();
+        if (g_log >= 1 && t - last_cycle_ms >= 200){
+            last_cycle_ms = t;
             fprintf(stderr, "[libdd] DEADLOCK cycle: ");
             for (size_t i=0;i<L;i++){
                 fprintf(stderr, "%s%s", graph_node_label(g_wfg, cyc[i]), (i+1<L)?" ":"");
@@ -75,93 +84,88 @@ static void log_cycle_if_any(void){
     }
 }
 
-/* ---- tránh -Wpedantic khi lấy symbol function pointer ---- */
+/* pedantic-safe dlsym */
 #define LOAD_SYM(dst, name) do {                         \
     void* __p = dlsym(RTLD_NEXT, (name));                \
-    if (!__p){                                           \
-        fprintf(stderr, "[libdd] dlsym %s failed: %s\n", \
-                (name), dlerror());                      \
-        abort();                                         \
-    }                                                    \
+    if (!__p){ fprintf(stderr, "[libdd] dlsym %s failed: %s\n",(name),dlerror()); abort(); } \
     *(void**)&(dst) = __p;                               \
 } while(0)
 
-/* ---- wrappers: khóa/unlock nội bộ bằng HÀM THẬT ---- */
+/* lock internal g_mu with REAL funcs (tránh đệ quy) */
 static inline void mu_lock(void){
-    if (!real_mutex_lock){ fprintf(stderr,"[libdd] real_mutex_lock NULL\n"); abort(); }
+    if(!real_mutex_lock){ fprintf(stderr,"[libdd] real_mutex_lock NULL\n"); abort(); }
     (void)real_mutex_lock(&g_mu);
 }
 static inline void mu_unlock(void){
-    if (!real_mutex_unlock){ fprintf(stderr,"[libdd] real_mutex_unlock NULL\n"); abort(); }
+    if(!real_mutex_unlock){ fprintf(stderr,"[libdd] real_mutex_unlock NULL\n"); abort(); }
     (void)real_mutex_unlock(&g_mu);
 }
 
-/* ===== constructor/destructor ===== */
+/* ctor/dtor */
 __attribute__((constructor))
 static void dd_init(void){
     LOAD_SYM(real_mutex_lock,    "pthread_mutex_lock");
     LOAD_SYM(real_mutex_trylock, "pthread_mutex_trylock");
     LOAD_SYM(real_mutex_unlock,  "pthread_mutex_unlock");
-
-    const char* lv = getenv("DD_LOG_LEVEL");
-    if (lv && *lv) g_log = atoi(lv);
-
-    g_wfg = graph_create();
-    if (!g_wfg){
-        fprintf(stderr, "[libdd] graph_create failed\n");
-        abort();
-    }
+    const char* lv = getenv("DD_LOG_LEVEL"); if (lv && *lv) g_log = atoi(lv);
+    g_wfg = graph_create(); if(!g_wfg){ fprintf(stderr,"[libdd] graph_create failed\n"); abort(); }
+    dd_log(2, "[libdd] init ok (log=%d)\n", g_log);
 }
-
 __attribute__((destructor))
 static void dd_fini(void){
     free(g_tab); g_tab=NULL; g_sz=g_cap=0;
     graph_free(g_wfg); g_wfg=NULL;
 }
 
-/* ===== hooks ===== */
-
+/* hooks */
 int pthread_mutex_trylock(pthread_mutex_t* m){
-    /* trylock KHÔNG chờ -> không thêm cạnh chờ để tránh false positive */
-    return real_mutex_trylock(m);
+    /* trylock: không thêm T->M; nếu thành công, thêm M->T để phản ánh sở hữu */
+    int rc = real_mutex_trylock(m);
+    if (rc == 0){
+        unsigned long me = tid_self();
+        mu_lock();
+        mrec_t* r = tab_get_or_add(m);
+        r->owner = me; r->count += 1;
+        graph_add_edge(g_wfg, node_of_mutex(m), node_of_thread(me)); /* M->T */
+        dd_log(2, "[libdd] trylock OK: M%p -> T%lu (count=%d)\n",(void*)m,me,r->count);
+        mu_unlock();
+    } else {
+        dd_log(2, "[libdd] trylock BUSY: M%p by T%lu\n", (void*)m, tid_self());
+    }
+    return rc;
 }
 
 int pthread_mutex_lock(pthread_mutex_t* m){
     unsigned long me = tid_self();
-    int rc_wait_edge_added = 0;
-    int owner_node = -1, me_node = -1;
+    int me_node=-1, m_node=-1;
+    int added_wait_edge = 0;
 
-    /* Trước khi gọi lock thật: nếu mutex đang do owner != me giữ -> me CHỜ owner */
+    /* Trước khi block: T->M + check cycle */
     mu_lock();
-    mrec_t* r = tab_get_or_add(m);
-    unsigned long owner = r->owner;
-
-    if (owner != 0 && owner != me){
-        me_node    = node_of_thread(me);
-        owner_node = node_of_thread(owner);
-        graph_add_edge(g_wfg, me_node, owner_node);   /* me -> owner (chờ) */
-        rc_wait_edge_added = 1;
-        log_cycle_if_any();
-    }
+    me_node = node_of_thread(me);
+    m_node  = node_of_mutex(m);
+    graph_add_edge(g_wfg, me_node, m_node);       /* T -> M */
+    added_wait_edge = 1;
+    dd_log(2, "[libdd] wait T%lu -> M%p\n", me, (void*)m);
+    log_cycle_if_any();
     mu_unlock();
 
-    /* Gọi lock thật (có thể block) */
+    /* Gọi lock thật (có thể chờ) */
     int rc = real_mutex_lock(m);
-    if (rc != 0) return rc;
+    if (rc != 0){
+        mu_lock();
+        if (added_wait_edge) graph_remove_edge(g_wfg, me_node, m_node);
+        mu_unlock();
+        return rc;
+    }
 
-    /* Đã khoá thành công:
-       - gỡ cạnh chờ (nếu có)
-       - cập nhật owner = me (+count) */
+    /* Sau khi lock: gỡ T->M, cập nhật owner, thêm M->T */
     mu_lock();
-    if (rc_wait_edge_added && me_node>=0 && owner_node>=0){
-        graph_remove_edge(g_wfg, me_node, owner_node);
-    }
-    r = tab_get_or_add(m);
-    if (r->owner == me){
-        r->count += 1;
-    } else {
-        r->owner = me; r->count = 1;
-    }
+    if (added_wait_edge) graph_remove_edge(g_wfg, me_node, m_node);  /* gỡ T->M */
+    mrec_t* r = tab_get_or_add(m);
+    if (r->owner == me) r->count += 1; else { r->owner = me; r->count = 1; }
+    graph_add_edge(g_wfg, m_node, me_node);       /* M -> T */
+    dd_log(2, "[libdd] acquired M%p -> T%lu (count=%d)\n", (void*)m, me, r->count);
     mu_unlock();
     return 0;
 }
@@ -173,10 +177,20 @@ int pthread_mutex_unlock(pthread_mutex_t* m){
     mu_lock();
     mrec_t* r = tab_get_or_add(m);
     unsigned long me = tid_self();
+    int me_node = node_of_thread(me);
+    int m_node  = node_of_mutex(m);
+
+    graph_remove_edge(g_wfg, m_node, me_node); /* gỡ M->T */
+
     if (r->owner == me){
         if (r->count > 1) r->count -= 1;
         else { r->count = 0; r->owner = 0; }
+    } else {
+        dd_log(2, "[libdd] warn: unlock by non-owner T%lu on M%p (owner=T%lu)\n",
+               me, (void*)m, r->owner);
     }
+    dd_log(2, "[libdd] released M%p by T%lu (count=%d, owner=%lu)\n",
+           (void*)m, me, r->count, r->owner);
     mu_unlock();
     return 0;
 }
