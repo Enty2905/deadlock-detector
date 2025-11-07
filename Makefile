@@ -84,3 +84,6 @@ clean:
 
 $(BINDIR)/demo_deadlock3: $(SRCDIR)/demo/demo_deadlock3.c | $(BINDIR)
 	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@
+
+$(BINDIR)/demo_nocycle: $(SRCDIR)/demo/demo_nocycle.c | $(BINDIR)
+	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@

@@ -66,7 +66,7 @@ static int node_of_mutex(const pthread_mutex_t* m){
     return graph_get_or_add_node(g_wfg, lb);
 }
 
-/* cycle logging (debounce) */
+/* cycle logging (debounce ~200ms) */
 static long long last_cycle_ms = 0;
 static void log_cycle_if_any(void){
     int* cyc=NULL; size_t L=0;
@@ -119,14 +119,14 @@ static void dd_fini(void){
 
 /* hooks */
 int pthread_mutex_trylock(pthread_mutex_t* m){
-    /* trylock: không thêm T->M; nếu thành công, thêm M->T để phản ánh sở hữu */
+    /* T8: trylock KHÔNG chờ -> không tạo T->M. Nếu thành công, phản ánh sở hữu (M->T). */
     int rc = real_mutex_trylock(m);
     if (rc == 0){
         unsigned long me = tid_self();
         mu_lock();
         mrec_t* r = tab_get_or_add(m);
         r->owner = me; r->count += 1;
-        graph_add_edge(g_wfg, node_of_mutex(m), node_of_thread(me)); /* M->T */
+        graph_add_edge(g_wfg, node_of_mutex(m), node_of_thread(me)); /* M -> T */
         dd_log(2, "[libdd] trylock OK: M%p -> T%lu (count=%d)\n",(void*)m,me,r->count);
         mu_unlock();
     } else {
@@ -140,14 +140,20 @@ int pthread_mutex_lock(pthread_mutex_t* m){
     int me_node=-1, m_node=-1;
     int added_wait_edge = 0;
 
-    /* Trước khi block: T->M + check cycle */
+    /* === T8: Chỉ thêm T->M khi mutex đang do thread KHÁC giữ (tránh false positive) === */
     mu_lock();
+    mrec_t* r = tab_get_or_add(m);
+    unsigned long owner = r->owner;
     me_node = node_of_thread(me);
     m_node  = node_of_mutex(m);
-    graph_add_edge(g_wfg, me_node, m_node);       /* T -> M */
-    added_wait_edge = 1;
-    dd_log(2, "[libdd] wait T%lu -> M%p\n", me, (void*)m);
-    log_cycle_if_any();
+    if (owner != 0 && owner != me){
+        graph_add_edge(g_wfg, me_node, m_node);       /* T -> M (đang CHỜ) */
+        added_wait_edge = 1;
+        dd_log(2, "[libdd] wait T%lu -> M%p (owner=T%lu)\n", me, (void*)m, owner);
+        log_cycle_if_any();
+    } else {
+        dd_log(2, "[libdd] fastpath lock M%p by T%lu (owner=%lu)\n",(void*)m,me,owner);
+    }
     mu_unlock();
 
     /* Gọi lock thật (có thể chờ) */
@@ -159,12 +165,12 @@ int pthread_mutex_lock(pthread_mutex_t* m){
         return rc;
     }
 
-    /* Sau khi lock: gỡ T->M, cập nhật owner, thêm M->T */
+    /* Sau khi lock: gỡ T->M (nếu có), cập nhật owner, thêm M->T */
     mu_lock();
     if (added_wait_edge) graph_remove_edge(g_wfg, me_node, m_node);  /* gỡ T->M */
-    mrec_t* r = tab_get_or_add(m);
+    r = tab_get_or_add(m);
     if (r->owner == me) r->count += 1; else { r->owner = me; r->count = 1; }
-    graph_add_edge(g_wfg, m_node, me_node);       /* M -> T */
+    graph_add_edge(g_wfg, m_node, me_node);       /* M -> T (đang sở hữu) */
     dd_log(2, "[libdd] acquired M%p -> T%lu (count=%d)\n", (void*)m, me, r->count);
     mu_unlock();
     return 0;

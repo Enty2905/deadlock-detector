@@ -59,3 +59,13 @@ Demo:
   timeout 2 env DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock
   timeout 2 ./bin/demo_deadlock3
   timeout 2 env DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock3
+
+### Day 8 — Chống false positive & Log chi tiết
+- `trylock`: không chờ ⇒ **không** thêm cạnh T→M; nếu thành công, thêm **M→T**.
+- `lock`: chỉ thêm cạnh **T→M** khi `owner != 0` **và** `owner != me` (đang bận bởi thread khác).
+- Khi lock thành công: gỡ **T→M**, cập nhật owner, thêm **M→T**.
+- Log chu trình dạng chuỗi node (TID & địa chỉ mutex đều hiển thị qua nhãn T…/M…).
+- Demo 3 case:
+  1) `demo_nocycle` (không vòng) → không có log chu trình.
+  2) `demo_deadlock` (vòng 2 đỉnh) → có log chu trình.
+  3) `demo_deadlock3` (vòng 3 đỉnh) → có log chu trình.
