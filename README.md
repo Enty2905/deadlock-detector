@@ -24,3 +24,17 @@ Output:
 
 ## Build
 make
+
+## Usage (Unified CLI)
+Build:
+  make
+Run:
+  ./bin/ddetect --mode wfg    --file tests/wfg/01_cycle.in
+  ./bin/ddetect --mode matrix --file tests/matrix/01_ok_simple.in
+
+## Complexity
+- WFG cycle detection (DFS/back-edge): O(P + E)
+- Matrix safety-check (Banker’s detection variant): ~ O(N^2 · M)
+
+## Test
+  ./scripts/run_tests.sh

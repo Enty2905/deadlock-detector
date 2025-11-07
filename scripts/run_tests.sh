@@ -16,3 +16,4 @@ for f in tests/matrix/*.in; do run_case ./bin/detect_matrix "$f" "${f%.in}.out";
 # [NEW] Hết phần thêm
 
 echo "$pass/$total tests passed"
+[[ "$pass" -eq "$total" ]] || exit 1
