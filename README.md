@@ -38,3 +38,13 @@ Run:
 
 ## Test
   ./scripts/run_tests.sh
+
+## Runtime detector (LD_PRELOAD)
+Build:
+  make
+Run demo:
+  timeout 2 ./bin/demo_deadlock              # treo (deadlock thật)
+  DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock  # in cycle
+
+Env:
+  DD_LOG_LEVEL=0|1  (0=tắt log, 1=bật log)
