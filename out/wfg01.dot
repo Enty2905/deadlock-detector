@@ -1,0 +1,13 @@
+digraph WFG {
+  rankdir=LR;
+  node [shape=circle, style=filled, fillcolor=white];
+  P0 [fillcolor="#ffdddd", penwidth=2];
+  P1 [fillcolor="#ffdddd", penwidth=2];
+  P2 [fillcolor="#ffdddd", penwidth=2];
+  P3 [fillcolor="#ffdddd", penwidth=2];
+  P0 -> P1 [color=red, penwidth=2];
+  P1 -> P2 [color=red, penwidth=2];
+  P2 -> P3 [color=red, penwidth=2];
+  P3 -> P0 [color=red, penwidth=2];
+  label="DEADLOCK: P0 P1 P2 P3"; labelloc=t; fontsize=12;
+}

@@ -208,7 +208,7 @@ int pthread_mutex_unlock(pthread_mutex_t* m){
 }
 
 /* --- libdd: safe dlsym wrapper --- */
-__attribute__((unused)) static void* dd_sym(const char* name){
+static void* dd_sym(const char* name){
     void* p = dlsym(RTLD_NEXT, name);
     if(!p) fprintf(stderr, "[libdd] dlsym %s failed\n", name);
     return p;

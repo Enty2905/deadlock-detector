@@ -1,0 +1,12 @@
+digraph WFG {
+  rankdir=LR;
+  node [shape=circle, style=filled, fillcolor=white];
+  P0;
+  P1;
+  P2;
+  P3;
+  P0 -> P1 [color="#888888"];
+  P1 -> P2 [color="#888888"];
+  P2 -> P3 [color="#888888"];
+  label="NO DEADLOCK"; labelloc=t; fontsize=12;
+}

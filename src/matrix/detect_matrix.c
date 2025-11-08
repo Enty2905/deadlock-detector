@@ -1,108 +1,78 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "util.h"
 
-static void* xmalloc(size_t n){
-    void* p = malloc(n);
-    if(!p){ perror("malloc"); exit(1); }
-    return p;
-}
 
 int main(int argc, char** argv){
-    if(argc==2){
-        if(!freopen(argv[1], "r", stdin)){ perror("freopen"); return 1; }
+    if(argc < 2){
+        fprintf(stderr, "Usage: %s <input>\n", argv[0]);
+        return 2;
+    }
+    FILE* f = fopen(argv[1], "r");
+    if(!f){ perror("fopen"); return 2; }
+
+    int N,M;
+    if(fscanf(f, "%d %d", &N, &M) != 2){
+        fprintf(stderr, "Bad header\n");
+        fclose(f); return 2;
     }
 
-    int N=0, M=0;
-    if (scanf("%d %d", &N, &M) != 2 || N <= 0 || M <= 0){
-        fprintf(stderr, "Bad N M\n");
-        return 1;
-    }
+    int **A = (int**)xcalloc(N, sizeof(int*));
+    int **Need = (int**)xcalloc(N, sizeof(int*));
+    int  *Avail = (int*)xcalloc(M, sizeof(int));
 
-    // Khởi tạo con trỏ về NULL để cleanup an toàn
-    int **A = NULL, **R = NULL;
-    int *Avail = NULL, *Work = NULL;
-    bool *Finish = NULL;
-
-    // Allocation
-    A = xmalloc((size_t)N * sizeof *A);
     for(int i=0;i<N;i++){
-        A[i] = xmalloc((size_t)M * sizeof **A);
+        A[i] = (int*)xcalloc(M, sizeof(int));
         for(int j=0;j<M;j++){
-            if (scanf("%d", &A[i][j]) != 1){
-                fprintf(stderr, "Bad Allocation at (%d,%d)\n", i, j);
-                goto cleanup;
-            }
+            if(fscanf(f, "%d", &A[i][j]) != 1){ fprintf(stderr, "Bad A\n"); return 2; }
         }
     }
-
-    // Need / Request
-    R = xmalloc((size_t)N * sizeof *R);
     for(int i=0;i<N;i++){
-        R[i] = xmalloc((size_t)M * sizeof **R);
+        Need[i] = (int*)xcalloc(M, sizeof(int));
         for(int j=0;j<M;j++){
-            if (scanf("%d", &R[i][j]) != 1){
-                fprintf(stderr, "Bad Need at (%d,%d)\n", i, j);
-                goto cleanup;
-            }
+            if(fscanf(f, "%d", &Need[i][j]) != 1){ fprintf(stderr, "Bad Need\n"); return 2; }
         }
     }
-
-    // Available
-    Avail = xmalloc((size_t)M * sizeof *Avail);
     for(int j=0;j<M;j++){
-        if (scanf("%d", &Avail[j]) != 1){
-            fprintf(stderr, "Bad Available at col %d\n", j);
-            goto cleanup;
-        }
+        if(fscanf(f, "%d", &Avail[j]) != 1){ fprintf(stderr, "Bad Available\n"); return 2; }
     }
+    fclose(f);
 
-    Work   = xmalloc((size_t)M * sizeof *Work);
-    Finish = xmalloc((size_t)N * sizeof *Finish);
+    int *Work = (int*)xcalloc(M, sizeof(int));
+    bool *Finish = (bool*)xcalloc(N, sizeof(bool));
+    for(int j=0;j<M;j++) Work[j] = Avail[j];
 
-    for(int j=0;j<M;j++) Work[j]   = Avail[j];
-    for(int i=0;i<N;i++) Finish[i] = false;
-
-    // Safety check (Banker detection variant)
-    int progressed;
-    do{
-        progressed = 0;
+    bool progress = true;
+    while(progress){
+        progress = false;
         for(int i=0;i<N;i++){
-            if (Finish[i]) continue;
-            int ok = 1;
+            if(Finish[i]) continue;
+            bool ok = true;
             for(int j=0;j<M;j++){
-                if (R[i][j] > Work[j]) { ok = 0; break; }
+                if(Need[i][j] > Work[j]){ ok=false; break; }
             }
-            if (ok){
+            if(ok){
                 for(int j=0;j<M;j++) Work[j] += A[i][j];
                 Finish[i] = true;
-                progressed = 1;
+                progress = true;
             }
         }
-    } while(progressed);
+    }
 
-    int dead = 0;
-    for(int i=0;i<N;i++) if(!Finish[i]) dead++;
+    int *dead = (int*)xcalloc(N, sizeof(int));
+    int K = 0;
+    for(int i=0;i<N;i++) if(!Finish[i]) dead[K++] = i;
 
-    if (!dead){
+    if(K == 0){
         puts("NO DEADLOCK");
-    } else {
-        printf("DEADLOCK on %d process(es):", dead);
-        for(int i=0;i<N;i++) if(!Finish[i]) printf(" P%d", i);
-        puts("");
+    }else{
+        printf("DEADLOCK on %d process(es):", K);
+        for(int t=0;t<K;t++) printf(" P%d", dead[t]);
+        putchar('\n');
     }
 
-cleanup:
-    if (A){
-        for(int i=0;i<N;i++) if (A[i]) free(A[i]);
-        free(A);
-    }
-    if (R){
-        for(int i=0;i<N;i++) if (R[i]) free(R[i]);
-        free(R);
-    }
-    free(Avail);
-    free(Work);
-    free(Finish);
+    for(int i=0;i<N;i++){ free(A[i]); free(Need[i]); }
+    free(A); free(Need); free(Avail); free(Work); free(Finish); free(dead);
     return 0;
 }

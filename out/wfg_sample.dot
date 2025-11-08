@@ -1,0 +1,18 @@
+digraph WFG {
+  rankdir=LR;
+  node [shape=circle, fontsize=11];
+  P0 [color=red, fontcolor=red];
+  P1 [color=red, fontcolor=red];
+  P2 [color=red, fontcolor=red];
+  P3 [color=red, fontcolor=red];
+  P4;
+  P5;
+  P0 -> P1 [color=red, penwidth=2.0];
+  P1 -> P2 [color=red, penwidth=2.0];
+  P2 -> P3 [color=red, penwidth=2.0];
+  P3 -> P0 [color=red, penwidth=2.0];
+  P3 -> P1 ;
+  P5 -> P3 ;
+  P3 -> P1 ;
+  P5 -> P1 ;
+}

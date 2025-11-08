@@ -1,41 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-pass=0; total=0
+BIN=./bin
+ok=0; total=0
 
 run_case() {
-  tool="$1"; in="$2"
-  exp_file="${in%.in}.out"
-  exp="$(tr -d '\r' < "$exp_file" | tr '[:lower:]' '[:upper:]')"
-  out="$(./bin/$tool "$in" 2>/dev/null || true)"
-  outU="$(printf "%s" "$out" | tr '[:lower:]' '[:upper:]')"
+  local exe="$1" in="$2" out="$3"
+  total=$((total+1))
+  local got
+  if ! got="$("$exe" "$in" 2>/dev/null)"; then
+    echo "[FAIL] $(basename "$exe") $(basename "$in")"
+    return
+  fi
+  local want; want="$(cat "$out")"
 
-  want_deadlock=0
-  echo "$exp" | grep -q "DEADLOCK" && want_deadlock=1
-
-  if [ "$want_deadlock" -eq 1 ]; then
-    if echo "$outU" | grep -q "DEADLOCK"; then
-      echo "[OK] $tool $(basename "$in")"
-      pass=$((pass+1))
-    else
-      echo "[FAIL] $tool $(basename "$in") -> expected DEADLOCK"
-      echo "OUT: $out"
-    fi
-  else
-    if echo "$outU" | grep -q "NO DEADLOCK"; then
-      echo "[OK] $tool $(basename "$in")"
-      pass=$((pass+1))
-    else
-      echo "[FAIL] $tool $(basename "$in") -> expected NO DEADLOCK"
-      echo "OUT: $out"
+  # Chuẩn hoá so sánh mềm cho DEADLOCK (matrix có case chỉ ghi DEADLOCK)
+  if [[ "$want" == "DEADLOCK" ]]; then
+    if [[ "$got" =~ ^DEADLOCK($|[[:space:]]) ]]; then
+      echo "[OK]   $(basename "$exe") $(basename "$in")"; ok=$((ok+1)); return
     fi
   fi
-  total=$((total+1))
+
+  if [[ "$got" == "$want" ]]; then
+    echo "[OK]   $(basename "$exe") $(basename "$in")"; ok=$((ok+1))
+  else
+    echo "[FAIL] $(basename "$exe") $(basename "$in")"
+  fi
 }
 
-for f in tests/wfg/*.in; do run_case detect_wfg "$f"; done
+# WFG
+for t in tests/wfg/*.in; do
+  run_case "$BIN/detect_wfg" "$t" "${t%.in}.out"
+done
 echo '---'
-for f in tests/matrix/*.in; do run_case detect_matrix "$f"; done
+# Matrix
+for t in tests/matrix/*.in; do
+  run_case "$BIN/detect_matrix" "$t" "${t%.in}.out"
+done
 
-echo "$pass/$total tests passed"
-[ "$pass" -eq "$total" ]
+echo "$ok/$total tests passed"

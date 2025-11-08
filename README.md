@@ -1,71 +1,181 @@
-# deadlock-detector
 
-## I/O Format
+# Deadlock Detector — VKU 23IT248
+
+Hệ thống phát hiện deadlock đa mô-đun:
+- **Matrix mode** (Banker’s Detection variant)
+- **WFG mode** (Wait-For Graph cycle detection)
+- **Runtime mode (libdd.so)** dùng `LD_PRELOAD` để phát hiện deadlock thật giữa các thread.
+
+---
+
+##  I/O Format
 
 ### Matrix mode
-Input:
-- Dòng 1: `N M`
-- `N` dòng Allocation (M số mỗi dòng)
-- `N` dòng Request/Need (M số mỗi dòng)
-- Dòng cuối: `M` số Available
+**Input:**
 
-Output:
-- `NO DEADLOCK` **hoặc**
-- `DEADLOCK on k process(es): P<i> P<j> ...`
+N M
+<Allocation[N][M]>
+<Request/Need[N][M]>
+<Available[M]>
+
+**Output:**
+
+NO DEADLOCK
+hoặc
+DEADLOCK on k process(es): P<i> P<j> ...
+
+
+---
 
 ### Wait-For Graph (WFG) mode
-Input:
-- Dòng 1: `P E`
-- `E` dòng `u v` nghĩa là `Pu` đang chờ `Pv` (0-index)
+**Input:**
 
-Output:
-- `NO DEADLOCK` **hoặc**
-- `DEADLOCK cycle: P<i0> P<i1> ... P<ik> P<i0>`
+P E
+<u v> # nghĩa là Pu đang chờ Pv (0-index)
 
-## Build
-make
+**Output:**
 
-## Usage (Unified CLI)
-Build:
-  make
-Run:
-  ./bin/ddetect --mode wfg    --file tests/wfg/01_cycle.in
-  ./bin/ddetect --mode matrix --file tests/matrix/01_ok_simple.in
+NO DEADLOCK
+hoặc
+DEADLOCK cycle: P<i0> P<i1> ... P<ik> P<i0>
 
-## Complexity
-- WFG cycle detection (DFS/back-edge): O(P + E)
-- Matrix safety-check (Banker’s detection variant): ~ O(N^2 · M)
 
-## Test
-  ./scripts/run_tests.sh
+---
 
-## Runtime detector (LD_PRELOAD)
-Build:
-  make
-Run demo:
-  timeout 2 ./bin/demo_deadlock              # treo (deadlock thật)
-  DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock  # in cycle
+##  Build
 
-Env:
-  DD_LOG_LEVEL=0|1  (0=tắt log, 1=bật log)
+```bash
+make clean && make
 
-### Day 7 — Runtime WFG (Thread↔Mutex)
-- Trước `lock(m)`: thêm **T→M** (thread chờ mutex).
-- Sau khi lock: gỡ **T→M**, thêm **M→T** (mutex thuộc thread).
-- `unlock(m)`: gỡ **M→T`.
-- Phát hiện chu trình ngay sau khi thêm **T→M**.
-Demo:
-  timeout 2 ./bin/demo_deadlock
-  timeout 2 env DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock
-  timeout 2 ./bin/demo_deadlock3
-  timeout 2 env DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock3
+Các binary chính được sinh trong bin/:
 
-### Day 8 — Chống false positive & Log chi tiết
-- `trylock`: không chờ ⇒ **không** thêm cạnh T→M; nếu thành công, thêm **M→T**.
-- `lock`: chỉ thêm cạnh **T→M** khi `owner != 0` **và** `owner != me` (đang bận bởi thread khác).
-- Khi lock thành công: gỡ **T→M**, cập nhật owner, thêm **M→T**.
-- Log chu trình dạng chuỗi node (TID & địa chỉ mutex đều hiển thị qua nhãn T…/M…).
-- Demo 3 case:
-  1) `demo_nocycle` (không vòng) → không có log chu trình.
-  2) `demo_deadlock` (vòng 2 đỉnh) → có log chu trình.
-  3) `demo_deadlock3` (vòng 3 đỉnh) → có log chu trình.
+    detect_matrix, detect_wfg
+
+    ddetect (CLI hợp nhất)
+
+    demo_deadlock, demo_deadlock3, demo_nocycle
+
+    libdd.so (runtime detector)
+
+    gen_wfg, gen_matrix (trình sinh dữ liệu ngẫu nhiên)
+
+    wfg_to_dot, wfg_check (visualization)
+
+    tools/dot2png.sh (chuyển DOT → PNG)
+
+ Usage (Unified CLI)
+
+./bin/ddetect --mode wfg    --file tests/wfg/01_cycle.in
+./bin/ddetect --mode matrix --file tests/matrix/01_ok_simple.in
+
+ Complexity
+Module	Thuật toán	Độ phức tạp
+WFG	DFS/back-edge	O(P + E)
+Matrix	Banker’s detection	~O(N²·M)
+Runtime (libdd)	Incremental cycle check	~O(V + E) mỗi lần lock
+ Test tự động
+
+./scripts/run_tests.sh
+
+Chạy toàn bộ test trong thư mục tests/ và báo [OK]/[FAIL].
+ Runtime Detector (LD_PRELOAD)
+
+# Tình huống deadlock thật
+timeout 2 ./bin/demo_deadlock || echo "(deadlock giả lập)"
+
+# Dò vòng bằng libdd.so
+DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock
+DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_deadlock3
+DD_LOG_LEVEL=1 LD_PRELOAD=./bin/libdd.so ./bin/demo_nocycle
+
+DD_LOG_LEVEL:
+
+    0 → tắt log
+
+    1 → log cơ bản
+
+    2 → log chi tiết từng mutex/thread
+
+ Visualization (Graphviz)
+
+Sinh .dot và .png minh họa chu trình:
+
+./bin/wfg_check tests/wfg/01_cycle.in
+./bin/wfg_to_dot tests/wfg/01_cycle.in out/wfg01.dot
+./tools/dot2png.sh out/wfg01.dot
+
+ Kết quả: out/wfg01.png thể hiện các node đỏ thuộc chu trình deadlock.
+ Benchmark (T12)
+
+Sinh dữ liệu lớn & đo hiệu năng:
+
+bash tools/bench.sh all
+head -n 5 out/bench_wfg.tsv
+head -n 5 out/bench_matrix.tsv
+cat out/bench_runtime.tsv
+
+Output gồm:
+
+    bench_wfg.tsv — thời gian phát hiện trên đồ thị lớn.
+
+    bench_matrix.tsv — thời gian kiểm tra ma trận.
+
+    bench_runtime.tsv — runtime preload/no-preload.
+
+ Demo toàn bộ quy trình
+
+#  Build sạch
+make clean && make
+
+#  Sinh dữ liệu WFG & Matrix
+./bin/gen_wfg 6 8 --seed 1 --mode cycle --cycle-len 4 > out/wfg_sample.in
+./bin/gen_matrix 5 3 --seed 7 --mode ok   > out/matrix_ok.in
+./bin/gen_matrix 5 3 --seed 7 --mode dead > out/matrix_dead.in
+
+#  Kiểm tra deadlock offline
+./bin/detect_wfg out/wfg_sample.in
+./bin/detect_matrix out/matrix_dead.in
+
+#  Visualize WFG
+./bin/wfg_to_dot out/wfg_sample.in out/wfg_sample.dot
+./tools/dot2png.sh out/wfg_sample.dot
+
+#  Runtime detection (libdd.so)
+timeout 2 ./bin/demo_deadlock || echo "(treo do deadlock giả lập)"
+DD_LOG_LEVEL=1 LD_PRELOAD="$PWD/bin/libdd.so" ./bin/demo_deadlock
+
+#  Benchmark tổng hợp
+bash tools/bench.sh all
+
+ Cấu trúc dự án
+
+include/     # header
+src/         # mã nguồn chính
+tools/       # tiện ích sinh dữ liệu / visualize / benchmark
+tests/       # test mẫu
+scripts/     # test runner
+bin/         # output build
+
+ Kết quả đạt được
+
+    Phát hiện deadlock đúng với cả Matrix và WFG.
+
+    Runtime detector (libdd.so) phát hiện vòng chờ giữa thread–mutex thực.
+
+    Xuất đồ thị .dot/.png minh họa vòng chờ.
+
+    Bộ sinh dữ liệu & benchmark hoạt động ổn định.
+
+    Toàn bộ build pass -Wall -Wextra -Werror -pedantic.
+
+ Phiên bản
+
+    v0.95-runtime (M2)
+    Đã hoàn thành:
+
+        Modules WFG / Matrix / Runtime
+
+        Visualization + Benchmark
+
+        Ready for Final Integration (T13+T15)
+

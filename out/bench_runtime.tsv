@@ -1,0 +1,5 @@
+case	sec
+nocycle(no-preload)	0.20
+nocycle(preload)	0.23
+deadlock(preload)	Command exited with non-zero status 124
+1.01

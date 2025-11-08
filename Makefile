@@ -1,96 +1,77 @@
-CC ?= gcc
-CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Werror -pedantic -g
-LDFLAGS ?=
-INCDIR := include
-SRCDIR := src
-BINDIR ?= bin
-OBJDIR ?= .obj
-OBJDIRPIC ?= .objpic
+.DEFAULT_GOAL := all
 
-LIBCOMMON := $(BINDIR)/libcommon.a
+CC       = cc
+CFLAGS   = -std=c11 -O2 -Wall -Wextra -Werror -pedantic -g
+INCDIR   = include
+SRCDIR   = src
+OBJDIR   = .obj
+OBJDIRPIC= .objpic
+BINDIR   = bin
+
+LIBCOMMON = $(BINDIR)/libcommon.a
 
 all: $(LIBCOMMON) \
      $(BINDIR)/detect_wfg $(BINDIR)/detect_matrix $(BINDIR)/ddetect \
      $(BINDIR)/demo_deadlock $(BINDIR)/demo_deadlock3 $(BINDIR)/demo_nocycle \
+     $(BINDIR)/wfg_to_dot $(BINDIR)/wfg_check \
+     $(BINDIR)/gen_wfg $(BINDIR)/gen_matrix \
      $(BINDIR)/libdd.so
 
 # --- dirs ---
-$(BINDIR) $(OBJDIR) $(OBJDIR)/common $(OBJDIR)/graph \
-$(OBJDIRPIC) $(OBJDIRPIC)/common $(OBJDIRPIC)/graph:
-	mkdir -p $@
+$(BINDIR) $(OBJDIR)/common $(OBJDIR)/graph $(OBJDIRPIC)/common $(OBJDIRPIC)/graph:
+	@mkdir -p $@
 
-# --- objects (static) ---
-$(OBJDIR)/common/%.o: $(SRCDIR)/common/%.c | $(OBJDIR)/common
+# --- libcommon.a ---
+$(OBJDIR)/common/util.o: $(SRCDIR)/common/util.c | $(OBJDIR)/common
 	$(CC) $(CFLAGS) -I$(INCDIR) -c $< -o $@
 
-$(OBJDIR)/graph/%.o: $(SRCDIR)/graph/%.c | $(OBJDIR)/graph
+$(OBJDIR)/graph/graph.o: $(SRCDIR)/graph/graph.c | $(OBJDIR)/graph
 	$(CC) $(CFLAGS) -I$(INCDIR) -c $< -o $@
 
-$(LIBCOMMON): $(OBJDIR)/common/util.o $(OBJDIR)/graph/graph.o | $(BINDIR)
-	ar rcs $@ $^
+$(LIBCOMMON): | $(BINDIR) $(OBJDIR)/common/util.o $(OBJDIR)/graph/graph.o
+	ar rcs $@ $(OBJDIR)/common/util.o $(OBJDIR)/graph/graph.o
 
 # --- apps ---
 $(BINDIR)/detect_wfg: $(SRCDIR)/wfg/detect_wfg.c $(LIBCOMMON) | $(BINDIR)
-	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LIBCOMMON) $(LDFLAGS)
+	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LIBCOMMON)
 
-$(BINDIR)/detect_matrix: $(SRCDIR)/matrix/detect_matrix.c | $(BINDIR)
-	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LDFLAGS)
+$(BINDIR)/detect_matrix: $(SRCDIR)/matrix/detect_matrix.c $(LIBCOMMON) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LIBCOMMON)
 
 $(BINDIR)/ddetect: $(SRCDIR)/cli/ddetect.c | $(BINDIR)
-	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@
 
-$(BINDIR)/demo_deadlock: $(SRCDIR)/demo/demo_deadlock.c | $(BINDIR)
-	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@
+$(BINDIR)/demo_deadlock: $(SRCDIR)/demo/demo_deadlock.c $(LIBCOMMON) | $(BINDIR)
+	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@ $(LIBCOMMON)
 
-$(BINDIR)/demo_deadlock3: $(SRCDIR)/demo/demo_deadlock3.c | $(BINDIR)
-	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@
+$(BINDIR)/demo_deadlock3: $(SRCDIR)/demo/demo_deadlock3.c $(LIBCOMMON) | $(BINDIR)
+	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@ $(LIBCOMMON)
 
-$(BINDIR)/demo_nocycle: $(SRCDIR)/demo/demo_nocycle.c | $(BINDIR)
-	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@
+$(BINDIR)/demo_nocycle: $(SRCDIR)/demo/demo_nocycle.c $(LIBCOMMON) | $(BINDIR)
+	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@ $(LIBCOMMON)
 
-# --- PIC objects ---
-$(OBJDIRPIC)/common/%.o: $(SRCDIR)/common/%.c | $(OBJDIRPIC)/common
+$(BINDIR)/wfg_to_dot: tools/wfg_to_dot.c $(LIBCOMMON) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LIBCOMMON)
+
+$(BINDIR)/wfg_check: tools/wfg_check.c $(LIBCOMMON) | $(BINDIR)
+	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LIBCOMMON)
+
+$(BINDIR)/gen_wfg: tools/gen_wfg.c | $(BINDIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+$(BINDIR)/gen_matrix: tools/gen_matrix.c | $(BINDIR)
+	$(CC) $(CFLAGS) $< -o $@
+
+# --- runtime lib ---
+$(OBJDIRPIC)/common/util.o: $(SRCDIR)/common/util.c | $(OBJDIRPIC)/common
 	$(CC) $(CFLAGS) -fPIC -I$(INCDIR) -c $< -o $@
 
-$(OBJDIRPIC)/graph/%.o: $(SRCDIR)/graph/%.c | $(OBJDIRPIC)/graph
+$(OBJDIRPIC)/graph/graph.o: $(SRCDIR)/graph/graph.c | $(OBJDIRPIC)/graph
 	$(CC) $(CFLAGS) -fPIC -I$(INCDIR) -c $< -o $@
 
-# --- shared runtime ---
 $(BINDIR)/libdd.so: $(SRCDIR)/runtime/libdd.c $(OBJDIRPIC)/common/util.o $(OBJDIRPIC)/graph/graph.o | $(BINDIR)
-	$(CC) $(CFLAGS) -shared -fPIC -I$(INCDIR) $^ -o $@ -ldl -pthread $(LDFLAGS)
+	$(CC) $(CFLAGS) -shared -fPIC -I$(INCDIR) $^ -o $@ -ldl -pthread
 
-# --- utilities ---
-fmt:
-	clang-format -i $(shell find $(SRCDIR) -name '*.c' -o -name '*.h' 2>/dev/null || true)
-
+.PHONY: clean
 clean:
 	rm -rf $(OBJDIR) $(OBJDIRPIC) $(BINDIR) demo_deadlock libdd.so
-
-# ==== Sanitizer builds ====
-.PHONY: asan tsan ubsan cleanall
-
-asan:
-	$(MAKE) clean
-	$(MAKE) \
-	  BINDIR=bin-asan OBJDIR=.obj-asan OBJDIRPIC=.objpic-asan \
-	  CFLAGS="$(CFLAGS) -O1 -fno-omit-frame-pointer -fsanitize=address" \
-	  LDFLAGS="$(LDFLAGS) -fsanitize=address"
-
-tsan:
-	$(MAKE) clean
-	$(MAKE) \
-	  BINDIR=bin-tsan OBJDIR=.obj-tsan OBJDIRPIC=.objpic-tsan \
-	  CFLAGS="$(CFLAGS) -O1 -fsanitize=thread" \
-	  LDFLAGS="$(LDFLAGS) -fsanitize=thread"
-
-ubsan:
-	$(MAKE) clean
-	$(MAKE) \
-	  BINDIR=bin-ubsan OBJDIR=.obj-ubsan OBJDIRPIC=.objpic-ubsan \
-	  CFLAGS="$(CFLAGS) -O1 -fsanitize=undefined -fno-sanitize-recover=undefined" \
-	  LDFLAGS="$(LDFLAGS) -fsanitize=undefined"
-
-cleanall: clean
-	rm -rf .obj-asan .objpic-asan bin-asan \
-	       .obj-tsan .objpic-tsan bin-tsan \
-	       .obj-ubsan .objpic-ubsan bin-ubsan
