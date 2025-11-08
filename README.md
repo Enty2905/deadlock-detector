@@ -147,35 +147,6 @@ DD_LOG_LEVEL=1 LD_PRELOAD="$PWD/bin/libdd.so" ./bin/demo_deadlock
 #  Benchmark tổng hợp
 bash tools/bench.sh all
 
- Cấu trúc dự án
 
-include/     # header
-src/         # mã nguồn chính
-tools/       # tiện ích sinh dữ liệu / visualize / benchmark
-tests/       # test mẫu
-scripts/     # test runner
-bin/         # output build
 
- Kết quả đạt được
-
-    Phát hiện deadlock đúng với cả Matrix và WFG.
-
-    Runtime detector (libdd.so) phát hiện vòng chờ giữa thread–mutex thực.
-
-    Xuất đồ thị .dot/.png minh họa vòng chờ.
-
-    Bộ sinh dữ liệu & benchmark hoạt động ổn định.
-
-    Toàn bộ build pass -Wall -Wextra -Werror -pedantic.
-
- Phiên bản
-
-    v0.95-runtime (M2)
-    Đã hoàn thành:
-
-        Modules WFG / Matrix / Runtime
-
-        Visualization + Benchmark
-
-        Ready for Final Integration (T13+T15)
 
