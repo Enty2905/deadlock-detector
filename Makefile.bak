@@ -9,9 +9,9 @@ OBJDIRPIC ?= .objpic
 
 LIBCOMMON := $(BINDIR)/libcommon.a
 
-all: $(LIBCOMMON) \
+all: $(LIBCOMMON) $(BINDIR)/detect_wfg $(BINDIR)/detect_matrix $(BINDIR)/ddetect $(BINDIR)/demo_deadlock $(BINDIR)/demo_deadlock3 $(BINDIR)/demo_nocycle $(BINDIR)/libdd.so
      $(BINDIR)/detect_wfg $(BINDIR)/detect_matrix $(BINDIR)/ddetect \
-     $(BINDIR)/demo_deadlock $(BINDIR)/demo_deadlock3 $(BINDIR)/demo_nocycle \
+     $(BINDIR)/demo_deadlock $(BINDIR)/demo_deadlock3 \
      $(BINDIR)/libdd.so
 
 # --- dirs ---
@@ -45,10 +45,7 @@ $(BINDIR)/demo_deadlock: $(SRCDIR)/demo/demo_deadlock.c | $(BINDIR)
 $(BINDIR)/demo_deadlock3: $(SRCDIR)/demo/demo_deadlock3.c | $(BINDIR)
 	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@
 
-$(BINDIR)/demo_nocycle: $(SRCDIR)/demo/demo_nocycle.c | $(BINDIR)
-	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@
-
-# --- PIC objects ---
+# --- objects (PIC) ---
 $(OBJDIRPIC)/common/%.o: $(SRCDIR)/common/%.c | $(OBJDIRPIC)/common
 	$(CC) $(CFLAGS) -fPIC -I$(INCDIR) -c $< -o $@
 
@@ -94,3 +91,6 @@ cleanall: clean
 	rm -rf .obj-asan .objpic-asan bin-asan \
 	       .obj-tsan .objpic-tsan bin-tsan \
 	       .obj-ubsan .objpic-ubsan bin-ubsan
+
+$(BINDIR)/demo_nocycle: $(SRCDIR)/demo/demo_nocycle.c | $(BINDIR)
+	$(CC) $(CFLAGS) -pthread -I$(INCDIR) $< -o $@
