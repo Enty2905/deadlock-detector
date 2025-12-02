@@ -14,7 +14,6 @@ all: $(LIBCOMMON) \
      $(BINDIR)/detect_wfg $(BINDIR)/detect_matrix $(BINDIR)/ddetect \
      $(BINDIR)/demo_deadlock $(BINDIR)/demo_deadlock3 $(BINDIR)/demo_nocycle \
      $(BINDIR)/wfg_to_dot $(BINDIR)/wfg_check \
-     $(BINDIR)/gen_wfg $(BINDIR)/gen_matrix \
      $(BINDIR)/libdd.so
 
 # --- dirs ---
@@ -55,12 +54,6 @@ $(BINDIR)/wfg_to_dot: tools/wfg_to_dot.c $(LIBCOMMON) | $(BINDIR)
 
 $(BINDIR)/wfg_check: tools/wfg_check.c $(LIBCOMMON) | $(BINDIR)
 	$(CC) $(CFLAGS) -I$(INCDIR) $< -o $@ $(LIBCOMMON)
-
-$(BINDIR)/gen_wfg: tools/gen_wfg.c | $(BINDIR)
-	$(CC) $(CFLAGS) $< -o $@
-
-$(BINDIR)/gen_matrix: tools/gen_matrix.c | $(BINDIR)
-	$(CC) $(CFLAGS) $< -o $@
 
 # --- runtime lib ---
 $(OBJDIRPIC)/common/util.o: $(SRCDIR)/common/util.c | $(OBJDIRPIC)/common

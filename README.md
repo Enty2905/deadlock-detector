@@ -57,8 +57,6 @@ Các binary chính được sinh trong bin/:
 
     libdd.so (runtime detector)
 
-    gen_wfg, gen_matrix (trình sinh dữ liệu ngẫu nhiên)
-
     wfg_to_dot, wfg_check (visualization)
 
     tools/dot2png.sh (chuyển DOT → PNG)
@@ -105,47 +103,23 @@ Sinh .dot và .png minh họa chu trình:
 ./tools/dot2png.sh out/wfg01.dot
 
  Kết quả: out/wfg01.png thể hiện các node đỏ thuộc chu trình deadlock.
- Benchmark (T12)
-
-Sinh dữ liệu lớn & đo hiệu năng:
-
-bash tools/bench.sh all
-head -n 5 out/bench_wfg.tsv
-head -n 5 out/bench_matrix.tsv
-cat out/bench_runtime.tsv
-
-Output gồm:
-
-    bench_wfg.tsv — thời gian phát hiện trên đồ thị lớn.
-
-    bench_matrix.tsv — thời gian kiểm tra ma trận.
-
-    bench_runtime.tsv — runtime preload/no-preload.
 
  Demo toàn bộ quy trình
 
 #  Build sạch
 make clean && make
 
-#  Sinh dữ liệu WFG & Matrix
-./bin/gen_wfg 6 8 --seed 1 --mode cycle --cycle-len 4 > out/wfg_sample.in
-./bin/gen_matrix 5 3 --seed 7 --mode ok   > out/matrix_ok.in
-./bin/gen_matrix 5 3 --seed 7 --mode dead > out/matrix_dead.in
-
 #  Kiểm tra deadlock offline
-./bin/detect_wfg out/wfg_sample.in
-./bin/detect_matrix out/matrix_dead.in
+./bin/detect_wfg tests/wfg/01_cycle.in
+./bin/detect_matrix tests/matrix/05_dead_none_can_start.in
 
 #  Visualize WFG
-./bin/wfg_to_dot out/wfg_sample.in out/wfg_sample.dot
-./tools/dot2png.sh out/wfg_sample.dot
+./bin/wfg_to_dot tests/wfg/01_cycle.in out/wfg01.dot
+./tools/dot2png.sh out/wfg01.dot
 
 #  Runtime detection (libdd.so)
 timeout 2 ./bin/demo_deadlock || echo "(treo do deadlock giả lập)"
 DD_LOG_LEVEL=1 LD_PRELOAD="$PWD/bin/libdd.so" ./bin/demo_deadlock
-
-#  Benchmark tổng hợp
-bash tools/bench.sh all
 
 
 
