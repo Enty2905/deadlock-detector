@@ -69,7 +69,7 @@ void graph_free(graph_t* g){
     free(g->label);
     free(g);
 }
-
+ 
 void graph_add_edge(graph_t* g, int u, int v){
     if(!g) return;
     if(u<0 || v<0 || u>=g->n || v>=g->n) return;

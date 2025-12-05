@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include "util.h"
 
-
 int main(int argc, char** argv){
     if(argc < 2){
         fprintf(stderr, "Usage: %s <input>\n", argv[0]);
@@ -11,7 +10,6 @@ int main(int argc, char** argv){
     }
     FILE* f = fopen(argv[1], "r");
     if(!f){ perror("fopen"); return 2; }
-
     int N,M;
     if(fscanf(f, "%d %d", &N, &M) != 2){
         fprintf(stderr, "Bad header\n");

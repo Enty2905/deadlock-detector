@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #include "util.h"
-
+ 
 void *xmalloc(size_t n){
     void *p = malloc(n);
     if(!p){ perror("malloc"); exit(1); }
